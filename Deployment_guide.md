@@ -1,3 +1,11 @@
+### Step-1: Fork following `ChatWoot` repository
+```
+https://github.com/chatwoot/chatwoot
+```
+### Step-2: Modify the forked  `ChatWoot` repository
+
+- Modify the `.env.example` file as following:-
+```shell
 # Learn about the various environment variables at
 # https://www.chatwoot.com/docs/self-hosted/configuration/environment-variables/#rails-production-variables
 
@@ -257,3 +265,66 @@ AZURE_APP_SECRET=
 # Set to true if you want to remove stale contact inboxes
 # contact_inboxes with no conversation older than 90 days will be removed
 # REMOVE_STALE_CONTACT_INBOX_JOB_STATUS=false
+```
+- Modify the `docker-compose.production.yaml` file as following:- 
+```shell
+services:
+  base: &base
+    image: chatwoot/chatwoot:latest
+    env_file: .env ## Change this file for customized env variables
+    volumes:
+      - ./data/storage:/app/storage
+
+  rails:
+    <<: *base
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - '127.0.0.1:3010:3000'
+    environment:
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+    entrypoint: docker/entrypoints/rails.sh
+    # command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
+    command: >
+      /bin/sh -c "bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 3000 -b 0.0.0.0"
+    restart: always
+
+  sidekiq:
+    <<: *base
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
+    restart: always
+
+  postgres:
+    image: postgres:12
+    restart: always
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DATABASE}
+      - POSTGRES_USER=${POSTGRES_USERNAME}
+      # Please provide your own password.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+  redis:
+    image: redis:alpine
+    restart: always
+    command: ["sh", "-c", "redis-server --requirepass \"$REDIS_PASSWORD\""]
+    env_file: .env
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - '127.0.0.1:6379:6379'
+```
+
